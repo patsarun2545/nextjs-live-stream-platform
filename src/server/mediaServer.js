@@ -49,7 +49,7 @@ const getStreamKey = (id, StreamPath) => {
 const { spawn } = require("child_process");
 const activeSessions = new Map();
 
-nms.on("postPublish", async (id, StreamPath, params) => {
+nms.on("postPublish", async (id, StreamPath) => {
   const streamKey = getStreamKey(id, StreamPath);
   if (!streamKey) return;
   console.log(`[TRANS] postPublish — starting transcode: ${streamKey}`);
@@ -82,7 +82,7 @@ nms.on("postPublish", async (id, StreamPath, params) => {
   const proc = spawn(ffmpegPath, args);
   activeSessions.set(streamKey, proc);
 
-  proc.stderr.on("data", (data) => {
+  proc.stderr.on("data", () => {
     // uncomment ถ้าอยากดู log ffmpeg
     // console.log("[FFMPEG]", data.toString());
   });
@@ -99,7 +99,7 @@ nms.on("postPublish", async (id, StreamPath, params) => {
   console.log(`[TRANS] Started transcode: ${streamKey}`);
 });
 
-nms.on("prePublish", async (id, StreamPath, params) => {
+nms.on("prePublish", async (id, StreamPath) => {
   const streamKey = getStreamKey(id, StreamPath);
   console.log("[NMS] prePublish streamKey:", streamKey);
   if (!streamKey) return;
@@ -121,7 +121,7 @@ nms.on("prePublish", async (id, StreamPath, params) => {
   }
 });
 
-nms.on("donePublish", async (id, StreamPath, params) => {
+nms.on("donePublish", async (id, StreamPath) => {
   const streamKey = getStreamKey(id, StreamPath);
   if (!streamKey) return;
 
@@ -145,7 +145,7 @@ nms.on("donePublish", async (id, StreamPath, params) => {
   }
 });
 
-nms.on("prePlay", async (id, StreamPath, params) => {
+nms.on("prePlay", async (id, StreamPath) => {
   const streamKey = getStreamKey(id, StreamPath);
   if (!streamKey) return;
   try {
@@ -161,7 +161,7 @@ nms.on("prePlay", async (id, StreamPath, params) => {
   }
 });
 
-nms.on("donePlay", async (id, StreamPath, params) => {
+nms.on("donePlay", async (id, StreamPath) => {
   const streamKey = getStreamKey(id, StreamPath);
   if (!streamKey) return;
   try {
