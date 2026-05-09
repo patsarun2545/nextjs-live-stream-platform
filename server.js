@@ -8,7 +8,6 @@ const express = require("express");
 const cors = require("cors");
 const compression = require("compression");
 const helmet = require("helmet");
-const mongoose = require("mongoose");
 const { WebSocketServer } = require("ws");
 require("dotenv").config({ path: ".env.local" });
 
@@ -41,13 +40,8 @@ app.prepare().then(async () => {
   );
 
   // ── MongoDB ────────────────────────────────────────────────────
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("✅ MongoDB connected");
-  } catch (err) {
-    console.error("❌ MongoDB connection failed:", err.message);
-    process.exit(1); // แก้จากเดิม: graceful exit แทน silent crash
-  }
+  const connectDB = require("./src/server/db");
+  await connectDB();
 
   // ── API Routes ────────────────────────────────────────────────
   const authRoutes = require("./src/server/routes/auth");

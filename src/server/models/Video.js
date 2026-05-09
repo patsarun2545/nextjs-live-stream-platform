@@ -56,7 +56,7 @@ videoSchema.index({ tags: 1 });
 videoSchema.index({ title: "text", description: "text" });
 
 // Auto-generate slug
-videoSchema.pre("save", function (next) {
+videoSchema.pre("save", function () {
   if (this.isNew && this.title && !this.slug) {
     const base = this.title
       .toLowerCase()
@@ -68,7 +68,6 @@ videoSchema.pre("save", function (next) {
   if (!this.metaDescription && this.description) {
     this.metaDescription = this.description.substring(0, 157) + "...";
   }
-  next();
 });
 
 videoSchema.statics.getLiveStreams = function (limit = 20) {

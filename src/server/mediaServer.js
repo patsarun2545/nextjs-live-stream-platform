@@ -15,7 +15,7 @@ const config = {
   http: {
     port:        Number(process.env.HLS_PORT) || 8888,
     mediaroot:   MEDIA_ROOT,
-    allow_origin: '*', // แก้จากเดิม: ต้องตั้ง allow_origin ให้ชัดเจน
+    allow_origin: '*',
   },
   trans: {
     ffmpeg: process.env.FFMPEG_PATH || '/usr/bin/ffmpeg',
@@ -32,10 +32,9 @@ const config = {
 
 const nms = new NodeMediaServer(config);
 
-// ── Events ──────────────────────────────────────────────────────
-
-nms.on('prePublish', async (id, StreamPath) => {
-  const streamKey = StreamPath.split('/').pop();
+nms.on('prePublish', async (id, StreamPath, params) => {
+  const streamKey = (StreamPath || '').split('/').pop();
+  if (!streamKey) return;
   try {
     const streamer = await User.findOne({ streamKey }).select('+streamKey');
     if (!streamer) {
@@ -44,7 +43,6 @@ nms.on('prePublish', async (id, StreamPath) => {
       console.log(`[NMS] Rejected unknown stream key: ${streamKey}`);
       return;
     }
-    // HLS URL ผ่าน proxy ที่ port 3001 แทน 8888 โดยตรง
     const hlsUrl = `/hls/live/${streamKey}/index.m3u8`;
     await Video.findOneAndUpdate(
       { streamer: streamer._id, status: 'live' },
@@ -57,8 +55,9 @@ nms.on('prePublish', async (id, StreamPath) => {
   }
 });
 
-nms.on('donePublish', async (id, StreamPath) => {
-  const streamKey = StreamPath.split('/').pop();
+nms.on('donePublish', async (id, StreamPath, params) => {
+  const streamKey = (StreamPath || '').split('/').pop();
+  if (!streamKey) return;
   try {
     const streamer = await User.findOne({ streamKey });
     if (!streamer) return;
@@ -73,8 +72,9 @@ nms.on('donePublish', async (id, StreamPath) => {
   }
 });
 
-nms.on('prePlay', async (id, StreamPath) => {
-  const streamKey = StreamPath.split('/').pop();
+nms.on('prePlay', async (id, StreamPath, params) => {
+  const streamKey = (StreamPath || '').split('/').pop();
+  if (!streamKey) return;
   try {
     const streamer = await User.findOne({ streamKey });
     if (!streamer) return;
@@ -86,12 +86,12 @@ nms.on('prePlay', async (id, StreamPath) => {
   } catch { /* silent */ }
 });
 
-nms.on('donePlay', async (id, StreamPath) => {
-  const streamKey = StreamPath.split('/').pop();
+nms.on('donePlay', async (id, StreamPath, params) => {
+  const streamKey = (StreamPath || '').split('/').pop();
+  if (!streamKey) return;
   try {
     const streamer = await User.findOne({ streamKey });
     if (!streamer) return;
-    // แก้จากเดิม: ป้องกัน viewerCount ติดลบ
     await Video.findOneAndUpdate(
       { streamer: streamer._id, status: 'live' },
       [{ $set: { viewerCount: { $max: [{ $subtract: ['$viewerCount', 1] }, 0] } } }],
