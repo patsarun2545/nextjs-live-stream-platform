@@ -30,12 +30,18 @@ app.prepare().then(async () => {
 
   // ── Static: HLS files (proxy จาก NMS port 8888) ───────────────
   // แก้ปัญหาเดิม: HLS อยู่ port 8888 ต่างจาก app → CORS error
-  const { createProxyMiddleware } = require("http-proxy-middleware");
+  const path = require("path");
+  const MEDIA_ROOT = process.env.MEDIA_ROOT
+    ? path.resolve(process.env.MEDIA_ROOT)
+    : path.join(process.cwd(), "media");
+
   server.use(
     "/hls",
-    createProxyMiddleware({
-      target: `http://localhost:${process.env.HLS_PORT || 8888}`,
-      changeOrigin: true,
+    express.static(MEDIA_ROOT, {
+      setHeaders: (res) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Cache-Control", "no-cache");
+      },
     }),
   );
 
