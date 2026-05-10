@@ -462,7 +462,7 @@ export default function DashboardPage() {
                   }}
                 >
                   {typeof window !== "undefined" ? window.location.origin : ""}
-                  /watch/{activeStream.slug}
+                  /watch/{activeStream.slug || activeStream._id}
                 </code>
               </div>
             </div>

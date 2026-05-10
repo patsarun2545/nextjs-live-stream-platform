@@ -35,7 +35,7 @@ router.get('/status/:streamKey', async (req, res) => {
     if (!streamer) return res.status(404).json({ live: false });
     const video = await Video.findOne(
       { streamer: streamer._id, status: 'live' },
-      'title viewerCount hlsUrl'
+      'title viewerCount hlsUrl slug'
     ).lean();
     res.json({ live: !!video, video: video || null, streamer: { username: streamer.username } });
   } catch (err) {
