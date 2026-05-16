@@ -49,13 +49,11 @@ const videoSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Indexes
 videoSchema.index({ status: 1, createdAt: -1 });
 videoSchema.index({ streamer: 1 });
 videoSchema.index({ tags: 1 });
 videoSchema.index({ title: "text", description: "text" });
 
-// Auto-generate slug
 videoSchema.pre("save", function () {
   if (this.isNew && this.title && !this.slug) {
     const base = this.title
@@ -65,6 +63,7 @@ videoSchema.pre("save", function () {
       .substring(0, 60);
     this.slug = `${base}-${this._id.toString().slice(-6)}`;
   }
+
   if (!this.metaDescription && this.description) {
     this.metaDescription = this.description.substring(0, 157) + "...";
   }

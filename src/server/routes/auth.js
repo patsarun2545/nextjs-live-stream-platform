@@ -1,12 +1,11 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const rateLimit = require("express-rate-limit"); // แก้จากเดิม: เพิ่ม rate limit
+const rateLimit = require("express-rate-limit");
 const User = require("../models/User");
 const { protect } = require("../middleware/auth");
 
 const router = express.Router();
 
-// แก้จากเดิม: rate limit บน auth routes กัน brute force
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === "production" ? 10 : 1000,
@@ -22,25 +21,27 @@ const signToken = (id) =>
 router.post("/register", authLimiter, async (req, res) => {
   try {
     const { username, email, password, role } = req.body;
+
     const existing = await User.findOne({ $or: [{ email }, { username }] });
     if (existing) {
-      return res.status(400).json({
-        message:
-          existing.email === email
-            ? "อีเมลนี้ถูกใช้งานแล้ว"
-            : "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว",
-      });
+      const message =
+        existing.email === email
+          ? "อีเมลนี้ถูกใช้งานแล้ว"
+          : "ชื่อผู้ใช้นี้ถูกใช้งานแล้ว";
+      return res.status(400).json({ message });
     }
+
     const user = new User({
       username,
       email,
       passwordHash: password,
       role: role === "streamer" ? "streamer" : "viewer",
     });
+
     if (user.role === "streamer") user.generateStreamKey();
     await user.save();
-    const token = signToken(user._id);
-    res.status(201).json({ token, user });
+
+    res.status(201).json({ token: signToken(user._id), user });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -50,30 +51,40 @@ router.post("/register", authLimiter, async (req, res) => {
 router.post("/login", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
+
     const user = await User.findOne({ email }).select("+passwordHash");
-    if (!user)
+    const isMatch = user && (await user.comparePassword(password));
+
+    if (!isMatch) {
       return res.status(401).json({ message: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" });
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch)
-      return res.status(401).json({ message: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" });
-    const token = signToken(user._id);
-    res.json({ token, user });
+    }
+
+    res.json({ token: signToken(user._id), user });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // GET /api/auth/me
-router.get("/me", protect, (req, res) => res.json({ user: req.user }));
+router.get("/me", protect, (req, res) => {
+  res.json({ user: req.user });
+});
 
 // PATCH /api/auth/me
 router.patch("/me", protect, async (req, res) => {
   try {
-    const allowed = ["username", "avatar"];
-    const updates = {};
-    allowed.forEach((f) => {
-      if (req.body[f] !== undefined) updates[f] = req.body[f];
-    });
+    const ALLOWED_FIELDS = ["username", "avatar"];
+    const updates = Object.fromEntries(
+      ALLOWED_FIELDS.filter((f) => req.body[f] !== undefined).map((f) => [
+        f,
+        req.body[f],
+      ]),
+    );
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "ไม่มีข้อมูลที่จะอัปเดต" });
+    }
+
     const user = await User.findByIdAndUpdate(req.user._id, updates, {
       new: true,
       runValidators: true,

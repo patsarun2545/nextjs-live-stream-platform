@@ -1,25 +1,31 @@
-const jwt  = require('jsonwebtoken');
-const User = require('../models/User');
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
 const protect = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'ไม่มี token กรุณา login ก่อน' });
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "ไม่มี token กรุณา login ก่อน" });
     }
-    const token   = authHeader.split(' ')[1];
+
+    const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id).select('-passwordHash');
-    if (!req.user) return res.status(401).json({ message: 'ไม่พบผู้ใช้' });
+
+    req.user = await User.findById(decoded.id).select("-passwordHash");
+    if (!req.user) {
+      return res.status(401).json({ message: "ไม่พบผู้ใช้" });
+    }
+
     next();
   } catch {
-    return res.status(401).json({ message: 'Token ไม่ถูกต้องหรือหมดอายุ' });
+    return res.status(401).json({ message: "Token ไม่ถูกต้องหรือหมดอายุ" });
   }
 };
 
 const streamerOnly = (req, res, next) => {
-  if (!['streamer', 'admin'].includes(req.user.role)) {
-    return res.status(403).json({ message: 'สิทธิ์ไม่เพียงพอ' });
+  if (!["streamer", "admin"].includes(req.user.role)) {
+    return res.status(403).json({ message: "สิทธิ์ไม่เพียงพอ" });
   }
   next();
 };

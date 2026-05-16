@@ -1,29 +1,34 @@
-'use client';
-import { useEffect, useState, useCallback } from 'react';
-import axios from 'axios';
-import VideoCard from '@/components/VideoCard';
+"use client";
+import { useEffect, useState, useCallback, useRef } from "react";
+import axios from "axios";
+import VideoCard from "@/components/VideoCard";
 
-const CATEGORIES = ['ทั้งหมด', 'gaming', 'music', 'education', 'sports', 'lifestyle'];
+const CATEGORIES = [
+  "ทั้งหมด",
+  "gaming",
+  "music",
+  "education",
+  "sports",
+  "lifestyle",
+];
+const LIMIT = 20;
 
 export default function HomeClient() {
-  const [videos,   setVideos]   = useState([]);
-  const [category, setCategory] = useState('ทั้งหมด');
-  const [search,   setSearch]   = useState('');
-  const [query,    setQuery]    = useState('');
-  const [loading,  setLoading]  = useState(true);
-  const [page,     setPage]     = useState(1);
-  const [total,    setTotal]    = useState(0);
-
-  const LIMIT = 20;
+  const [videos, setVideos] = useState([]);
+  const [category, setCategory] = useState("ทั้งหมด");
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const fetchVideos = useCallback(async () => {
     setLoading(true);
     try {
       const params = { page, limit: LIMIT };
-      if (category !== 'ทั้งหมด') params.category = category;
+      if (category !== "ทั้งหมด") params.category = category;
       if (query) params.search = query;
-
-      const { data } = await axios.get('/api/videos', { params });
+      const { data } = await axios.get("/api/videos", { params });
       setVideos(data.videos);
       setTotal(data.total);
     } catch (err) {
@@ -37,12 +42,18 @@ export default function HomeClient() {
     fetchVideos();
   }, [fetchVideos]);
 
-  // reset page เมื่อ filter เปลี่ยน
+  // Reset to page 1 when filters change — setPage(1) will trigger fetchVideos via page dependency
+  // Use a ref to skip the reset on the very first render to avoid double fetch on mount
+  const isFirstRender = useRef(true);
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     setPage(1);
   }, [category, query]);
 
-  // debounce search
+  // Debounce search input
   useEffect(() => {
     const t = setTimeout(() => setQuery(search), 400);
     return () => clearTimeout(t);
@@ -51,75 +62,97 @@ export default function HomeClient() {
   const totalPages = Math.ceil(total / LIMIT);
 
   return (
-    <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
-
-      {/* Search bar */}
+    <div
+      className="container"
+      style={{ paddingTop: "24px", paddingBottom: "40px" }}
+    >
+      {/* Search */}
       <input
         type="search"
+        className="input-base"
         placeholder="ค้นหา stream..."
         value={search}
-        onChange={e => setSearch(e.target.value)}
-        style={{
-          width: '100%', background: '#1a1a1a', border: '1px solid #3a3a3d',
-          borderRadius: '8px', padding: '10px 16px', color: '#efeff1',
-          fontSize: '15px', outline: 'none', marginBottom: '16px',
-        }}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{ marginBottom: "16px", fontSize: "15px" }}
       />
 
       {/* Category filters */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '24px' }}>
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat}
-            onClick={() => setCategory(cat)}
-            style={{
-              background: cat === category ? '#9147ff' : '#1a1a1a',
-              border:     `1px solid ${cat === category ? '#9147ff' : '#3a3a3d'}`,
-              color:      cat === category ? '#fff' : '#adadb8',
-              padding: '6px 14px', borderRadius: '20px', cursor: 'pointer',
-              fontSize: '13px', fontWeight: cat === category ? 600 : 400,
-              transition: 'all 0.15s',
-            }}
-          >{cat}</button>
-        ))}
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          flexWrap: "wrap",
+          marginBottom: "24px",
+        }}
+      >
+        {CATEGORIES.map((cat) => {
+          const active = cat === category;
+          return (
+            <button
+              key={cat}
+              onClick={() => setCategory(cat)}
+              style={{
+                background: active ? "var(--accent)" : "var(--bg-card)",
+                border: `1px solid ${active ? "var(--accent)" : "var(--border-input)"}`,
+                color: active ? "#fff" : "var(--text-muted)",
+                padding: "6px 14px",
+                borderRadius: "var(--radius-full)",
+                cursor: "pointer",
+                fontSize: "13px",
+                fontWeight: active ? 600 : 400,
+                transition: `all var(--transition)`,
+              }}
+            >
+              {cat}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Grid */}
+      {/* Content */}
       {loading ? (
         <SkeletonGrid />
       ) : videos.length === 0 ? (
         <EmptyState />
       ) : (
         <>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: '16px',
-          }}>
-            {videos.map(v => <VideoCard key={v._id} video={v} />)}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            {videos.map((v) => (
+              <VideoCard key={v._id} video={v} />
+            ))}
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
-            <div style={{
-              display: 'flex', justifyContent: 'center', gap: '8px',
-              marginTop: '32px',
-            }}>
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "8px",
+                marginTop: "32px",
+              }}
+            >
+              <PageButton
+                onClick={() => setPage((p) => p - 1)}
                 disabled={page === 1}
-                style={pageBtnStyle(false, page === 1)}
-              >← ก่อนหน้า</button>
-
-              <span style={{ color: '#adadb8', fontSize: '14px', alignSelf: 'center' }}>
+              >
+                ← ก่อนหน้า
+              </PageButton>
+              <span style={{ color: "var(--text-muted)", fontSize: "14px" }}>
                 {page} / {totalPages}
               </span>
-
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              <PageButton
+                onClick={() => setPage((p) => p + 1)}
                 disabled={page === totalPages}
-                style={pageBtnStyle(false, page === totalPages)}
-              >ถัดไป →</button>
+              >
+                ถัดไป →
+              </PageButton>
             </div>
           )}
         </>
@@ -128,44 +161,63 @@ export default function HomeClient() {
   );
 }
 
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
 function SkeletonGrid() {
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-      gap: '16px',
-    }}>
-      {[...Array(8)].map((_, i) => (
-        <div key={i} style={{
-          background: '#1a1a1a', borderRadius: '8px',
-          aspectRatio: '16/9',
-          animation: 'pulse 1.5s ease-in-out infinite',
-          animationDelay: `${i * 0.08}s`,
-        }} />
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+        gap: "16px",
+      }}
+    >
+      {Array.from({ length: 8 }, (_, i) => (
+        <div
+          key={i}
+          style={{
+            background: "var(--bg-card)",
+            borderRadius: "var(--radius)",
+            aspectRatio: "16/9",
+            animation: `pulse 1.5s ease-in-out ${i * 0.08}s infinite`,
+          }}
+        />
       ))}
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
     </div>
   );
 }
 
 function EmptyState() {
   return (
-    <div style={{ textAlign: 'center', padding: '80px 0', color: '#adadb8' }}>
-      <p style={{ fontSize: '40px', marginBottom: '16px' }}>📭</p>
-      <p style={{ fontSize: '16px', marginBottom: '8px' }}>ไม่มี stream ออนไลน์ตอนนี้</p>
-      <p style={{ fontSize: '13px' }}>ลองเปลี่ยนหมวดหมู่หรือค้นหาใหม่</p>
+    <div
+      style={{
+        textAlign: "center",
+        padding: "80px 0",
+        color: "var(--text-muted)",
+      }}
+    >
+      <p style={{ fontSize: "40px", marginBottom: "16px" }}>📭</p>
+      <p style={{ fontSize: "16px", marginBottom: "8px" }}>
+        ไม่มี stream ออนไลน์ตอนนี้
+      </p>
+      <p style={{ fontSize: "13px" }}>ลองเปลี่ยนหมวดหมู่หรือค้นหาใหม่</p>
     </div>
   );
 }
 
-function pageBtnStyle(active, disabled) {
-  return {
-    background: active ? '#9147ff' : '#1a1a1a',
-    border: '1px solid #3a3a3d',
-    color: disabled ? '#555' : '#efeff1',
-    padding: '8px 16px', borderRadius: '8px',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontSize: '13px',
-    opacity: disabled ? 0.5 : 1,
-  };
+function PageButton({ onClick, disabled, children }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="btn-secondary"
+      style={{
+        color: disabled ? "var(--text-dim)" : "var(--text-primary)",
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      {children}
+    </button>
+  );
 }

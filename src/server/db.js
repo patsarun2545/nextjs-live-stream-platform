@@ -1,8 +1,8 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 let isConnected = false;
 
-const connectDB = async () => {
+async function connectDB() {
   if (isConnected) return;
 
   try {
@@ -12,13 +12,13 @@ const connectDB = async () => {
     isConnected = true;
     console.log(`✅ MongoDB connected: ${conn.connection.host}`);
   } catch (err) {
-    console.error('❌ MongoDB connection failed:', err.message);
+    console.error("❌ MongoDB connection failed:", err.message);
     process.exit(1);
   }
-};
+}
 
-mongoose.connection.on('disconnected', () => {
-  console.warn('⚠️ MongoDB disconnected — retrying...');
+mongoose.connection.on("disconnected", () => {
+  console.warn("⚠️  MongoDB disconnected — retrying in 5s...");
   isConnected = false;
   setTimeout(connectDB, 5000);
 });

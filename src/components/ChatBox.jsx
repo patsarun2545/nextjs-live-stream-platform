@@ -1,6 +1,15 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 
+const MAX_MESSAGES = 200;
+
+// Bug fix: use wss:// in production (https pages block ws://)
+function buildWsUrl(videoId) {
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const port = process.env.NEXT_PUBLIC_WS_PORT || 3001;
+  return `${protocol}://${window.location.hostname}:${port}/chat/${videoId}`;
+}
+
 export default function ChatBox({ videoId, user }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -8,51 +17,52 @@ export default function ChatBox({ videoId, user }) {
   const wsRef = useRef(null);
   const bottomRef = useRef(null);
   const retryRef = useRef(null);
+  const mountedRef = useRef(true); // track mount state to prevent post-unmount retries
 
-  // แก้จากเดิม: reconnect logic ที่ทำงานจริง
   const connect = useCallback(() => {
-    const ws = new WebSocket(
-      `ws://${window.location.hostname}:${process.env.NEXT_PUBLIC_PORT || 3001}/chat/${videoId}`,
-    );
+    const ws = new WebSocket(buildWsUrl(videoId));
 
     ws.onopen = () => {
       setConnected(true);
       clearTimeout(retryRef.current);
     };
-
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        setMessages((prev) => [...prev.slice(-199), data]);
+        setMessages((prev) => [...prev.slice(-(MAX_MESSAGES - 1)), data]);
       } catch {
-        /* ignore */
+        /* ignore malformed frames */
       }
     };
-
     ws.onclose = () => {
       setConnected(false);
-      retryRef.current = setTimeout(connect, 3000); // reconnect จริงๆ
+      if (mountedRef.current) {
+        retryRef.current = setTimeout(connect, 3000);
+      }
     };
-
     ws.onerror = () => ws.close();
 
     wsRef.current = ws;
   }, [videoId]);
 
   useEffect(() => {
+    mountedRef.current = true;
     connect();
     return () => {
+      mountedRef.current = false;
       clearTimeout(retryRef.current);
       wsRef.current?.close();
     };
   }, [connect]);
 
+  // Auto-scroll to latest message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const sendMessage = () => {
-    if (!input.trim() || wsRef.current?.readyState !== 1 || !user) return;
+    if (!input.trim() || wsRef.current?.readyState !== WebSocket.OPEN || !user)
+      return;
     wsRef.current.send(
       JSON.stringify({
         type: "message",
@@ -63,54 +73,32 @@ export default function ChatBox({ videoId, user }) {
     setInput("");
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        minHeight: "500px",
-        background: "#18181b",
-        borderRadius: "8px",
-        border: "1px solid #2a2a2e",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          padding: "12px 16px",
-          borderBottom: "1px solid #2a2a2e",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-        }}
-      >
+    <div style={styles.container}>
+      {/* Header */}
+      <div style={styles.header}>
         <span style={{ fontWeight: 600, fontSize: "14px" }}>แชทสด</span>
         <span
           style={{
-            width: "8px",
-            height: "8px",
-            borderRadius: "50%",
-            background: connected ? "#00c853" : "#666",
-            flexShrink: 0,
+            ...styles.dot,
+            background: connected ? "#00c853" : "var(--text-dim)",
           }}
         />
       </div>
 
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: "12px 16px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "6px",
-        }}
-      >
+      {/* Messages */}
+      <div style={styles.messageList}>
         {messages.length === 0 && (
           <p
             style={{
-              color: "#adadb8",
+              color: "var(--text-muted)",
               fontSize: "13px",
               textAlign: "center",
               marginTop: "20px",
@@ -120,55 +108,43 @@ export default function ChatBox({ videoId, user }) {
           </p>
         )}
         {messages.map((msg, i) => (
-          <div key={i} style={{ fontSize: "13px", lineHeight: "1.5" }}>
-            <span style={{ color: "#9147ff", fontWeight: 600 }}>
+          <div key={i} style={{ fontSize: "13px", lineHeight: 1.5 }}>
+            <span style={{ color: "var(--accent)", fontWeight: 600 }}>
               {msg.username}
             </span>
-            <span style={{ color: "#adadb8" }}>: </span>
-            <span style={{ color: "#efeff1" }}>{msg.text}</span>
+            <span style={{ color: "var(--text-muted)" }}>: </span>
+            <span style={{ color: "var(--text-primary)" }}>{msg.text}</span>
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
 
-      <div style={{ padding: "12px 16px", borderTop: "1px solid #2a2a2e" }}>
+      {/* Input */}
+      <div style={styles.inputArea}>
         {user ? (
           <div style={{ display: "flex", gap: "8px" }}>
             <input
+              className="input-base"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
+              onKeyDown={handleKeyDown}
               placeholder="พิมพ์ข้อความ..."
               maxLength={200}
               style={{
-                flex: 1,
-                background: "#0e0e10",
-                border: "1px solid #3a3a3d",
-                borderRadius: "6px",
+                borderRadius: "var(--radius-sm)",
                 padding: "8px 12px",
-                color: "#efeff1",
                 fontSize: "13px",
-                outline: "none",
               }}
             />
             <button
               onClick={sendMessage}
               disabled={!input.trim()}
+              className="btn-primary"
               style={{
-                background: "#9147ff",
-                border: "none",
-                borderRadius: "6px",
+                width: "auto",
                 padding: "0 14px",
-                color: "#fff",
-                fontWeight: 600,
                 fontSize: "13px",
-                cursor: "pointer",
-                opacity: input.trim() ? 1 : 0.5,
+                borderRadius: "var(--radius-sm)",
               }}
             >
               ส่ง
@@ -176,9 +152,13 @@ export default function ChatBox({ videoId, user }) {
           </div>
         ) : (
           <p
-            style={{ color: "#adadb8", fontSize: "13px", textAlign: "center" }}
+            style={{
+              color: "var(--text-muted)",
+              fontSize: "13px",
+              textAlign: "center",
+            }}
           >
-            <a href="/login" style={{ color: "#9147ff" }}>
+            <a href="/login" style={{ color: "var(--accent)" }}>
               เข้าสู่ระบบ
             </a>{" "}
             เพื่อร่วมแชท
@@ -188,3 +168,42 @@ export default function ChatBox({ videoId, user }) {
     </div>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+const styles = {
+  container: {
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    minHeight: "500px",
+    background: "var(--bg-secondary)",
+    borderRadius: "var(--radius)",
+    border: "1px solid var(--border)",
+    overflow: "hidden",
+  },
+  header: {
+    padding: "12px 16px",
+    borderBottom: "1px solid var(--border)",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+  messageList: {
+    flex: 1,
+    overflowY: "auto",
+    padding: "12px 16px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  inputArea: {
+    padding: "12px 16px",
+    borderTop: "1px solid var(--border)",
+  },
+};

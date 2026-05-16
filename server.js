@@ -1,40 +1,35 @@
-// server.js — Custom Express + Next.js + WebSocket
-// แก้ปัญหาเดิม: ไม่มี top-level await, ES Module ถูกต้อง
-
 const { createServer } = require("http");
 const { parse } = require("url");
+const path = require("path");
 const next = require("next");
 const express = require("express");
 const cors = require("cors");
 const compression = require("compression");
 const helmet = require("helmet");
-const { WebSocketServer } = require("ws");
+const { WebSocketServer, WebSocket } = require("ws");
 require("dotenv").config({ path: ".env.local" });
 
-const dev = process.env.NODE_ENV !== "production";
-const app = next({ dev });
-const handle = app.getRequestHandler();
+const MEDIA_ROOT = process.env.MEDIA_ROOT
+  ? path.resolve(process.env.MEDIA_ROOT)
+  : path.join(process.cwd(), "media");
 
-app.prepare().then(async () => {
+const PORT = process.env.PORT || 3001;
+const dev = process.env.NODE_ENV !== "production";
+
+async function start() {
+  const nextApp = next({ dev });
+  const handle = nextApp.getRequestHandler();
+  await nextApp.prepare();
+
   const server = express();
 
-  // ── Middleware ─────────────────────────────────────────────────
+  // ── Middleware ────────────────────────────────────────────────
   server.use(cors());
   server.use(compression({ level: 6 }));
   server.use(express.json());
-  server.use(
-    helmet({
-      contentSecurityPolicy: false, // Next.js จัดการ CSP เอง
-    }),
-  );
+  server.use(helmet({ contentSecurityPolicy: false }));
 
-  // ── Static: HLS files (proxy จาก NMS port 8888) ───────────────
-  // แก้ปัญหาเดิม: HLS อยู่ port 8888 ต่างจาก app → CORS error
-  const path = require("path");
-  const MEDIA_ROOT = process.env.MEDIA_ROOT
-    ? path.resolve(process.env.MEDIA_ROOT)
-    : path.join(process.cwd(), "media");
-
+  // ── HLS static files (proxied from media folder to avoid CORS issues) ──
   server.use(
     "/hls",
     express.static(MEDIA_ROOT, {
@@ -45,43 +40,43 @@ app.prepare().then(async () => {
     }),
   );
 
-  // ── MongoDB ────────────────────────────────────────────────────
+  // ── Database ──────────────────────────────────────────────────
   const connectDB = require("./src/server/db");
   await connectDB();
 
   // ── API Routes ────────────────────────────────────────────────
-  const authRoutes = require("./src/server/routes/auth");
-  const videoRoutes = require("./src/server/routes/videos");
-  const streamRoutes = require("./src/server/routes/stream");
-  const seoRoutes = require("./src/server/routes/seo");
+  server.use("/api/auth", require("./src/server/routes/auth"));
+  server.use("/api/videos", require("./src/server/routes/videos"));
+  server.use("/api/stream", require("./src/server/routes/stream"));
+  server.use("/", require("./src/server/routes/seo"));
 
-  server.use("/api/auth", authRoutes);
-  server.use("/api/videos", videoRoutes);
-  server.use("/api/stream", streamRoutes);
-  server.use("/", seoRoutes); // sitemap.xml, robots.txt
+  // ── Next.js (SSR + static) ────────────────────────────────────
+  server.all("/{*any}", (req, res) => handle(req, res, parse(req.url, true)));
 
-  // ── Next.js handler (SSR + static) ───────────────────────────
-  server.all("/{*any}", (req, res) => {
-    const parsedUrl = parse(req.url, true);
-    handle(req, res, parsedUrl);
+  // ── HTTP + WebSocket ──────────────────────────────────────────
+  const httpServer = createServer(server);
+  setupWebSocket(httpServer);
+
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
   });
 
-  // ── HTTP + WebSocket Server ───────────────────────────────────
-  const httpServer = createServer(server);
+  // ── Media server (RTMP → HLS) ─────────────────────────────────
+  const nms = require("./src/server/mediaServer");
+  nms.run();
+  console.log(`📡 RTMP on port ${process.env.RTMP_PORT || 1935}`);
+  console.log(`📺 HLS  on port ${process.env.HLS_PORT || 8888}`);
+}
 
-  // WebSocket chat — แก้ปัญหาเดิม: path ต้องรองรับ /chat/:videoId
+function setupWebSocket(httpServer) {
   const wss = new WebSocketServer({ server: httpServer });
 
-  // เก็บ clients แยกตาม videoId
-  const rooms = new Map(); // Map<videoId, Set<WebSocket>>
+  // Map<videoId, Set<WebSocket>>
+  const rooms = new Map();
 
   wss.on("connection", (ws, req) => {
-    // รับ path /chat/<videoId>
     const match = req.url.match(/^\/chat\/([a-f0-9]{24})$/);
-    if (!match) {
-      ws.terminate();
-      return;
-    }
+    if (!match) return ws.terminate();
 
     const videoId = match[1];
     if (!rooms.has(videoId)) rooms.set(videoId, new Set());
@@ -98,12 +93,11 @@ app.prepare().then(async () => {
           timestamp: Date.now(),
         });
 
-        // broadcast ไปทุกคนในห้องเดียวกัน
         rooms.get(videoId)?.forEach((client) => {
-          if (client.readyState === 1) client.send(payload);
+          if (client.readyState === WebSocket.OPEN) client.send(payload);
         });
       } catch {
-        // ignore parse errors
+        /* ignore parse errors */
       }
     });
 
@@ -114,16 +108,9 @@ app.prepare().then(async () => {
 
     ws.on("error", () => ws.close());
   });
+}
 
-  // ── Start ────────────────────────────────────────────────────
-  const PORT = process.env.PORT || 3001;
-  httpServer.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-  });
-
-  // ── Node Media Server (RTMP → HLS) ────────────────────────────
-  const nms = require("./src/server/mediaServer");
-  nms.run();
-  console.log(`📡 RTMP on port ${process.env.RTMP_PORT || 1935}`);
-  console.log(`📺 HLS  on port ${process.env.HLS_PORT || 8888}`);
+start().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });

@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const crypto = require("crypto"); // แก้จากเดิม: ใช้ crypto แทน timestamp
+const crypto = require("crypto");
 
 const userSchema = new mongoose.Schema(
   {
@@ -39,7 +39,6 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Hash password ก่อน save
 userSchema.pre("save", async function () {
   if (!this.isModified("passwordHash")) return;
   const salt = await bcrypt.genSalt(12);
@@ -50,11 +49,9 @@ userSchema.methods.comparePassword = function (candidate) {
   return bcrypt.compare(candidate, this.passwordHash);
 };
 
-// แก้จากเดิม: ใช้ crypto.randomBytes แทน timestamp — ป้องกัน predictable key
 userSchema.methods.generateStreamKey = function () {
-  const key = `sk_${crypto.randomBytes(16).toString("hex")}`;
-  this.streamKey = key;
-  return key;
+  this.streamKey = `sk_${crypto.randomBytes(16).toString("hex")}`;
+  return this.streamKey;
 };
 
 userSchema.methods.toJSON = function () {

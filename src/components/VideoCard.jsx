@@ -1,19 +1,22 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Avatar, Tag } from "./ui";
 
 export default function VideoCard({ video }) {
   const { title, streamer, viewerCount, thumbnail, slug, category } = video;
+
   return (
     <Link href={`/watch/${slug}`} style={{ display: "block" }}>
       <div
         style={{
-          background: "#1a1a1a",
-          borderRadius: "8px",
+          background: "var(--bg-card)",
+          borderRadius: "var(--radius)",
           overflow: "hidden",
-          transition: "transform 0.15s",
+          transition: `transform var(--transition)`,
           cursor: "pointer",
         }}
       >
+        {/* Thumbnail */}
         <div
           style={{
             position: "relative",
@@ -62,36 +65,22 @@ export default function VideoCard({ video }) {
               borderRadius: "4px",
             }}
           >
-            👁 {viewerCount?.toLocaleString() || 0} คน
+            👁 {viewerCount?.toLocaleString() ?? 0} คน
           </span>
         </div>
+
+        {/* Info */}
         <div style={{ padding: "10px 12px" }}>
           <div
             style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}
           >
-            <div
-              style={{
-                width: "36px",
-                height: "36px",
-                flexShrink: 0,
-                borderRadius: "50%",
-                background: "#9147ff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "14px",
-                fontWeight: 700,
-                color: "#fff",
-              }}
-            >
-              {streamer?.username?.[0]?.toUpperCase() || "?"}
-            </div>
+            <Avatar username={streamer?.username} size={36} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p
                 style={{
                   fontSize: "14px",
                   fontWeight: 600,
-                  color: "#efeff1",
+                  color: "var(--text-primary)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -100,23 +89,17 @@ export default function VideoCard({ video }) {
                 {title}
               </p>
               <p
-                style={{ fontSize: "13px", color: "#adadb8", marginTop: "2px" }}
+                style={{
+                  fontSize: "13px",
+                  color: "var(--text-muted)",
+                  marginTop: "2px",
+                }}
               >
                 {streamer?.username}
               </p>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "#9147ff",
-                  background: "rgba(145,71,255,0.15)",
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  display: "inline-block",
-                  marginTop: "4px",
-                }}
-              >
-                {category}
-              </span>
+              <div style={{ marginTop: "4px" }}>
+                <Tag>{category}</Tag>
+              </div>
             </div>
           </div>
         </div>
